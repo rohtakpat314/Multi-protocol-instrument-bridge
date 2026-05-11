@@ -1,0 +1,13 @@
+build*/
+docs/latex/build/
+*.uf2
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+*.exe
+*.aux
+*.log
+*.out
+*.toc

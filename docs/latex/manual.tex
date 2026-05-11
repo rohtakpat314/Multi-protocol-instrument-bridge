@@ -1,0 +1,279 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{enumitem}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue
+}
+
+\definecolor{codebg}{RGB}{246,248,250}
+\definecolor{codeframe}{RGB}{210,215,220}
+
+\lstdefinestyle{bridge}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible
+}
+
+\title{ProbeBridge\\Technical Manual}
+\author{Firmware Project Documentation}
+\date{May 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The ProbeBridge is a USB CDC command adapter for I2C, SPI, UART, and bit-banged 1-Wire targets. It is intended for bench debug, production test fixtures, hardware bring-up, and firmware validation tasks where a small scriptable bus adapter is more useful than a large dedicated instrument. The current implementation targets Raspberry Pi Pico / RP2040 using the Pico SDK.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Project Overview}
+
+The bridge exposes a virtual serial port over USB. A host PC sends newline-terminated text commands such as \texttt{i2c scan}, \texttt{spi xfer 0x9F 0 0 0}, or \texttt{ow reset}. The firmware parses each command, executes the requested bus transaction, and returns a concise status line.
+
+\subsection{Goals}
+
+\begin{itemize}[nosep]
+  \item Provide one compact adapter for common low-speed instrument and board interfaces.
+  \item Keep the command format readable from both terminals and scripts.
+  \item Separate command parsing from hardware backends so parsing can be host-tested.
+  \item Make protocol behavior easy to extend without rewriting the console layer.
+  \item Demonstrate clean embedded C structure suitable for internal test tooling.
+\end{itemize}
+
+\subsection{Non-Goals}
+
+\begin{itemize}[nosep]
+  \item It is not a high-throughput logic analyzer.
+  \item It is not a voltage-safe universal adapter without external level shifting.
+  \item It does not currently implement binary framing, target power control, or firmware updates over the command channel.
+\end{itemize}
+
+\section{System Architecture}
+
+\begin{lstlisting}[style=bridge]
+PC terminal or automation script
+        |
+        | USB CDC text commands
+        v
+Pico SDK stdio USB
+        |
+        v
+line_editor.c
+        |
+        v
+command.c
+        |
+        v
+bus.h abstraction
+        |
+        v
+bus_pico.c
+        |
+        v
+I2C / SPI / UART / 1-Wire targets
+\end{lstlisting}
+
+\subsection{Firmware Modules}
+
+\begin{longtable}{>{\ttfamily}p{0.28\linewidth}p{0.62\linewidth}}
+\toprule
+Module & Responsibility \\
+\midrule
+src/main.c & Initializes USB stdio, initializes the bus backend, and runs the main command loop. \\
+src/line\_editor.c & Collects bytes from the USB CDC stream into newline-terminated command lines. \\
+src/command.c & Tokenizes input, validates arguments, dispatches commands, and formats replies. \\
+include/bridge/bus.h & Defines the protocol backend interface used by the parser and tests. \\
+src/bus\_pico.c & Implements I2C, SPI, UART, and 1-Wire operations using RP2040 peripherals and GPIO timing. \\
+tests/parser\_tests.c & Provides fake backend functions for host-side command parser regression tests. \\
+\bottomrule
+\end{longtable}
+
+\section{Hardware Interface}
+
+\subsection{Default Pico Pinout}
+
+\begin{longtable}{lll}
+\toprule
+Protocol & Signal & Pico GPIO \\
+\midrule
+I2C0 & SDA & GP4 \\
+I2C0 & SCL & GP5 \\
+SPI0 & MISO & GP16 \\
+SPI0 & CS & GP17 \\
+SPI0 & SCK & GP18 \\
+SPI0 & MOSI & GP19 \\
+UART0 & TX & GP0 \\
+UART0 & RX & GP1 \\
+1-Wire & DQ & GP22 \\
+\bottomrule
+\end{longtable}
+
+\subsection{Electrical Requirements}
+
+\begin{itemize}[nosep]
+  \item The RP2040 GPIO bank is 3.3 V only.
+  \item I2C and 1-Wire require pull-up resistors. Internal pull-ups are enabled for convenience, but external pull-ups are recommended.
+  \item The bridge and target must share ground.
+  \item Use level shifting for 1.8 V, 2.5 V, or 5 V targets.
+  \item Keep SPI connections short at high clock rates.
+\end{itemize}
+
+\section{Command Protocol}
+
+\subsection{Lexical Rules}
+
+Commands are ASCII text lines. Arguments are whitespace separated. Lines beginning with no tokens are ignored, and text after a leading \texttt{\#} token is treated as a comment by the tokenizer.
+
+Numeric arguments support decimal, hexadecimal, octal, and binary notation.
+
+\begin{longtable}{ll}
+\toprule
+Notation & Example \\
+\midrule
+Decimal & \texttt{26} \\
+Hexadecimal & \texttt{0x1A} \\
+Octal & \texttt{032} \\
+Binary & \texttt{0b11010} \\
+\bottomrule
+\end{longtable}
+
+\subsection{Reply Prefixes}
+
+\begin{longtable}{ll}
+\toprule
+Prefix & Meaning \\
+\midrule
+\texttt{OK} & Command completed successfully. \\
+\texttt{ERR} & Command failed or was rejected. \\
+\texttt{TIMEOUT} & Command returned partial data before its timeout expired. \\
+\bottomrule
+\end{longtable}
+
+\section{Command Reference}
+
+\subsection{General}
+
+\begin{lstlisting}[style=bridge]
+help
+status
+\end{lstlisting}
+
+\subsection{I2C}
+
+\begin{lstlisting}[style=bridge]
+i2c scan
+i2c speed <hz>
+i2c read <addr> <len>
+i2c write <addr> <bytes...>
+i2c wr <addr> <rx_len> <bytes...>
+\end{lstlisting}
+
+I2C addresses are 7-bit addresses in the range \texttt{0x08} through \texttt{0x77}. The \texttt{i2c wr} command performs a repeated-start transaction suitable for register reads.
+
+\subsection{SPI}
+
+\begin{lstlisting}[style=bridge]
+spi speed <hz>
+spi xfer <bytes...>
+spi write <bytes...>
+\end{lstlisting}
+
+SPI is full duplex. The bridge returns one received byte for every transmitted byte. The current firmware asserts the fixed SPI chip-select pin for the duration of the transfer.
+
+\subsection{UART}
+
+\begin{lstlisting}[style=bridge]
+uart speed <baud>
+uart write <bytes...>
+uart read <len> [timeout_ms]
+\end{lstlisting}
+
+The current UART format is 8N1. The optional read timeout defaults to 100 ms.
+
+\subsection{1-Wire}
+
+\begin{lstlisting}[style=bridge]
+ow reset
+ow write <bytes...>
+ow read <len>
+\end{lstlisting}
+
+1-Wire bytes are written and read least-significant bit first according to standard-speed 1-Wire timing.
+
+\section{Build and Flash}
+
+\subsection{Firmware Build}
+
+Install the Pico SDK, set \texttt{PICO\_SDK\_PATH}, then run:
+
+\begin{lstlisting}[style=bridge]
+cmake -S . -B build -G Ninja
+cmake --build build
+\end{lstlisting}
+
+Flash \texttt{build/multi\_protocol\_bridge.uf2} to the Pico.
+
+\subsection{Host Parser Tests}
+
+The parser tests do not require the Pico SDK:
+
+\begin{lstlisting}[style=bridge]
+cmake -S . -B build-host -G Ninja -DBRIDGE_HOST_TESTS=ON
+cmake --build build-host
+.\build-host\parser_tests.exe
+\end{lstlisting}
+
+\section{Bring-Up Procedure}
+
+\begin{enumerate}[nosep]
+  \item Flash the firmware.
+  \item Open the USB CDC serial port.
+  \item Run \texttt{help}; confirm the command list is printed.
+  \item Run \texttt{status}; confirm default bus speeds.
+  \item Run \texttt{i2c scan} with no target connected.
+  \item Connect a known I2C target and repeat \texttt{i2c scan}.
+  \item Validate SPI with a JEDEC flash ID read.
+  \item Validate UART with a TX/RX loopback.
+  \item Validate 1-Wire with a DS18B20 or equivalent device.
+\end{enumerate}
+
+\section{Testing Strategy}
+
+The project uses two levels of testing:
+
+\begin{itemize}[nosep]
+  \item Host parser tests verify command grammar, argument validation, and reply formatting.
+  \item Bench tests verify electrical wiring and protocol behavior against known devices.
+\end{itemize}
+
+Parser tests should be updated before changing command syntax. Hardware docs should be updated before changing pins, timing assumptions, or electrical behavior.
+
+\section{Future Work}
+
+\begin{itemize}[nosep]
+  \item Add configurable SPI mode and chip-select selection.
+  \item Add GPIO commands for reset lines and fixture control.
+  \item Add ADC voltage measurement for target rail checks.
+  \item Add binary framing for high-throughput scripted use.
+  \item Add a small adapter PCB with pull-ups, level shifting, and ESD protection.
+  \item Add an STM32 backend using the same \texttt{bus.h} contract.
+\end{itemize}
+
+\end{document}
