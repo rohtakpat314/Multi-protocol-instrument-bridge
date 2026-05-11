@@ -1,5 +1,6 @@
 build*/
 docs/latex/build/
+Multi-protocol-instrument-bridge/
 *.uf2
 *.elf
 *.bin
