@@ -1,4 +1,4 @@
-# ProbeBridge
+# USB Bridge
 
 USB-to-everything bench adapter for instrument bring-up and test automation.
 
