@@ -1,22 +1,20 @@
-# USB Bridge
+# USB-Bridge
 
-USB-to-everything bench adapter for instrument bring-up and test automation.
+A USB CDC adapter for I2C, SPI, UART, and bit-banged 1-Wire. The host sees a virtual serial port and sends text commands. 
+The firmware executes the corresponding bus transactions and replies. 
 
-A USB CDC command adapter for I2C, SPI, UART, and bit-banged 1-Wire targets. The host PC sees a virtual serial port; the board accepts readable text commands and executes bus transactions on the target side.
+This started as an internal bench tool for hardware validation, something lighter and more hackable than a Bus Pirate, with a 
+command grammar that's easy to type by hand. 
 
-This is the kind of utility a hardware validation or internal test team builds when they need something smaller and more hackable than a Bus Pirate, FTDI MPSSE adapter, or dedicated lab instrument.
-
-## Highlights
-
-- USB CDC virtual serial interface.
-- Text command parser written in portable C.
-- I2C scan, read, write, and repeated-start write-read.
-- SPI full-duplex transfers with chip-select control.
-- UART read/write with configurable baud rate.
-- Standard-speed bit-banged 1-Wire reset, read, and write.
-- Host-side parser tests using fake bus backends.
-- Hardware backend isolated behind `include/bridge/bus.h`.
-- Formal LaTeX technical manual and Markdown engineering docs.
+What it does:
+1. USB CDC virtual serial interface, no driver installation on modern OS
+2. Text command parser written in C, free of SDK dependencies
+3. I2C: bus scan, read, write, and repeated start write-read sequences
+4. SPI: full-duplex transfers with chip-select control
+5. UART: configurable baud rate, byte-level read and write
+6. 1-Wire: bit-banged reset, read, write
+7. Host-side parser tests using fake bus backends, no hardware needed for running
+8. Hardware backend isolated behind `include/bridge/bus.h`, simplifying MCU porting 
 
 ## Repository Layout
 
@@ -66,7 +64,7 @@ The current firmware targets Raspberry Pi Pico / RP2040 using the Pico SDK.
 | UART0 | RX | GP1 |
 | 1-Wire | DQ | GP22 |
 
-The Pico is a 3.3 V device. Use external level shifting for non-3.3 V targets. I2C and 1-Wire need pull-ups; internal pull-ups are enabled for convenience, but external pull-ups are recommended for real bench use.
+The Pico is a 3.3V device. Use external level shifting for non-3.3V targets. I2C and 1-Wire need pull-ups; internal pull-ups are enabled for convenience, but external pull-ups are recommended for real bench use.
 
 ## Command Examples
 
