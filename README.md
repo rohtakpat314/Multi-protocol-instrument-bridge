@@ -3,12 +3,11 @@
 A USB CDC adapter for I2C, SPI, UART, and bit-banged 1-Wire. The host sees a virtual serial port and sends text commands. 
 The firmware executes the corresponding bus transactions and replies. 
 
-This started as an internal bench tool for hardware validation, something lighter and more hackable than a Bus Pirate, with a 
-command grammar that's easy to type by hand. 
+This started as an internal bench tool for hardware validation.
 
 What it does:
-1. USB CDC virtual serial interface, no driver installation on modern OS
-2. Text command parser written in C, free of SDK dependencies
+1. USB CDC virtual serial interface, no driver installation 
+2. Text command parser written in C free of SDK dependencies
 3. I2C: bus scan, read, write, and repeated start write-read sequences
 4. SPI: full-duplex transfers with chip-select control
 5. UART: configurable baud rate, byte-level read and write
@@ -64,7 +63,7 @@ The current firmware targets Raspberry Pi Pico / RP2040 using the Pico SDK.
 | UART0 | RX | GP1 |
 | 1-Wire | DQ | GP22 |
 
-The Pico is a 3.3V device. Use external level shifting for non-3.3V targets. I2C and 1-Wire need pull-ups; internal pull-ups are enabled for convenience, but external pull-ups are recommended for real bench use.
+The Pico is a 3.3V device. I2C and 1-Wire need pull-ups; internal pull-ups are enabled for convenience, but external pull-ups are recommended for real bench use.
 
 ## Command Examples
 
@@ -105,7 +104,7 @@ Flash the generated UF2:
 build/probebridge.uf2
 ```
 
-Open the USB serial port from a terminal. The CDC baud rate selected by the host is nominal; USB CDC does not depend on that value for transport speed.
+Open the USB serial port from a terminal. The CDC baud rate selected by the host is nominal speed. 
 
 ## Run Host Parser Tests
 
